@@ -1,0 +1,43 @@
+# Ignore environment variable files
+.env
+.env.*
+.txt
+
+# Byte-compiled / cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Virtual environment folders
+venv/
+env/
+.venv/
+.env/
+
+# VS Code settings (if you use it)
+.vscode/
+
+# Mac system files (if you're on macOS)
+.DS_Store
+
+# Temporary files
+*.log
+*.tmp
+
+# Python-specific dependency lock files (optional)
+Pipfile.lock
+poetry.lock
+
+# Ignore all credential files
+credentials/
+*.env
+*.salt
+*.bak
+
+# Ignore Log files
+logs/
+*.txt
+*.log
