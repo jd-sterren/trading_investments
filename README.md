@@ -5,80 +5,56 @@ The purpose of this project is not limited to data collection but analysis using
 model for possible predictive measures in real time.
 
 ## Project Structure
-trading_investments/
-│
-├── data/                           # Collected live data saved here
-│   └── stock_data_YYYY-MM-DD.csv
-│
-├── inc/                            # Core code
-│   ├── functions.py                # Fetch, collect, log stock data
-│   ├── credential_manager.py       # AES-GCM encryption for API keys
-│   ├── credentials/                # Encrypted environment files (prod/dev/staging)
-│   └── logs/                       # Logs for collection events and errors
-│
-├── etrade_data_collector.py        # Standalone launcher for stock data collection
-├── .gitignore                      # (Ignore credentials, logs, compiled files)
-└── README.md                       # (This file)
+trading_investments/</br>
+│</br>
+├── data/                           # Collected live data saved here</br>
+│   └── stock_data_YYYY-MM-DD.csv</br>
+│</br>
+├── inc/                            # Core code</br>
+│   ├── functions.py                # Fetch, collect, log stock data</br>
+│   ├── credential_manager.py       # AES-GCM encryption for API keys</br>
+│   ├── credentials/                # Encrypted environment files (prod/dev/staging)</br>
+│   └── logs/                       # Logs for collection events and errors</br>
+│</br>
+├── etrade_data_collector.py        # Standalone launcher for stock data collection</br>
+├── .gitignore                      # (Ignore credentials, logs, compiled files)</br>
+└── README.md                       # (This file)</br>
 
 ## Project Steps
-<b>Step 1: Real-Time Data Collection</b>
+### Step 1: Real-Time Data Collection
 Fetch live stock data via E*TRADE API (and crypto exchange APIs soon).
-
 Collect price, volume, bid/ask sizes, bid/ask spread every 30 seconds.
-
 Save data immediately to disk (/data/) to prevent loss during crashes.
-
 Collect sentiment values (planned) for symbols from news, social media, or analyst ratings during each data pull window.
 
-<b>Step 2: Feature Engineering</b>
+### Step 2: Feature Engineering
 Using the collected real-time data, compute:
-
 Technical indicators:
-
 RSI (Relative Strength Index)
-
 MACD (Moving Average Convergence Divergence)
-
 OBV (On-Balance Volume)
-
 Bid/Ask Imbalance, Spread Percentage, etc.
-
 Sentiment indicators:
-
 Aggregated Sentiment Score per symbol per 30-second window (planned)
 
-<b>Step 3: Machine Learning Model Training</b>
+### Step 3: Machine Learning Model Training
 Training Phase:
-
 Load historical collected data.
-
 Train simple supervised models (starting with Decision Trees, Random Forests, Logistic Regression).
-
 Input features:
-
 Price action features (Close, Spread, Volume Delta)
-
 Technical indicators (RSI, MACD, OBV)
-
 Sentiment score
-
 Time-based features (Time of Day, Day of Week)
-
 Labels:
-
 Future price movement (up, down, stable)
-
 Volatility change (high, low)
 
-<b>Step 4: Real-Time Prediction and Strategy</b>
+### Step 4: Real-Time Prediction and Strategy
 Live Phase:
-
 As new data is collected every 30 seconds:
-
 Update rolling features in memory
-
 Feed into the trained model
-
 Predict next move:
 
 🔵 Hold
@@ -88,5 +64,4 @@ Predict next move:
 🔴 Sell
 
 Log predictions and suggested actions for analysis
-
 (Optional Later: Send alerts via webhook, Discord, email OR IF BOLD A.I. does the buy and sell)
