@@ -21,13 +21,13 @@ trading_investments/</br>
 └── README.md                       # (This file)</br>
 
 ## Project Steps
-### Step 1: Real-Time Data Collection
+<h3 style="color:blue;">Step 1: Real-Time Data Collection</h3>
 Fetch live stock data via E*TRADE API (and crypto exchange APIs soon).
 Collect price, volume, bid/ask sizes, bid/ask spread every 30 seconds.
 Save data immediately to disk (/data/) to prevent loss during crashes.
 Collect sentiment values (planned) for symbols from news, social media, or analyst ratings during each data pull window.
 
-### Step 2: Feature Engineering
+<h3 style="color:blue;">Step 2: Feature Engineering</h3>
 Using the collected real-time data, compute:
 Technical indicators:
 RSI (Relative Strength Index)
@@ -37,7 +37,7 @@ Bid/Ask Imbalance, Spread Percentage, etc.
 Sentiment indicators:
 Aggregated Sentiment Score per symbol per 30-second window (planned)
 
-### Step 3: Machine Learning Model Training
+<h3 style="color:blue;">Step 3: Machine Learning Model Training</h3>
 Training Phase:
 Load historical collected data.
 Train simple supervised models (starting with Decision Trees, Random Forests, Logistic Regression).
@@ -50,7 +50,7 @@ Labels:
 Future price movement (up, down, stable)
 Volatility change (high, low)
 
-### Step 4: Real-Time Prediction and Strategy
+<h3 style="color:blue;">Step 4: Real-Time Prediction and Strategy</h3>
 Live Phase:
 As new data is collected every 30 seconds:
 Update rolling features in memory
