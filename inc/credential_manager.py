@@ -36,11 +36,6 @@ def backup_file(filepath):
         shutil.copy(filepath, filepath + ".bak")
         print(f"📄 Backup created: {filepath}.bak")
 
-# def get_paths(env="dev"):
-#     base_dir = os.path.join("credentials", env)
-#     credentials_file = os.path.join(base_dir, "credentials.env")
-#     salt_file = os.path.join(base_dir, "credentials.salt")
-#     return credentials_file, salt_file
 def get_paths(env="dev"):
     """Return correct paths for credentials and salt files."""
     base_dir = os.path.dirname(__file__)  # this gets /inc automatically
@@ -92,7 +87,7 @@ def inject_decrypted_env(environment="dev", required_vars=None, crash_on_fail=Tr
     try:
         env_vars = decrypt_variables(environment=environment)
     except Exception as e:
-        print(f"❗ Failed to decrypt environment '{environment}': {e}")
+        print(f"Failed to decrypt environment '{environment}': {e}")
         if crash_on_fail:
             exit(1)
         else:
@@ -108,7 +103,7 @@ def inject_decrypted_env(environment="dev", required_vars=None, crash_on_fail=Tr
                 missing.append(var)
 
         if missing:
-            print(f"❗ Missing required environment variables: {', '.join(missing)}")
+            print(f"Missing required environment variables: {', '.join(missing)}")
             if crash_on_fail:
                 exit(1)
             else:
@@ -127,7 +122,7 @@ def add_encrypted_variables(environment="dev"):
     salt_exists = os.path.exists(salt_file)
 
     if not salt_exists:
-        print(f"🔐 Generating new salt for environment '{environment}'...")
+        print(f"Generating new salt for environment '{environment}'...")
         salt = generate_salt()
         save_salt(salt, salt_file)
     else:
@@ -146,7 +141,7 @@ def add_encrypted_variables(environment="dev"):
         var_value = input(f"Enter the value for {var_name}: ").strip()
 
         if var_name in env_vars:
-            print(f"⚠️ Variable '{var_name}' already exists. It will be overwritten.")
+            print(f"Variable '{var_name}' already exists. It will be overwritten.")
 
         encrypted_value = encrypt_value(key, var_value)
         env_vars[var_name] = encrypted_value
@@ -161,31 +156,7 @@ def add_encrypted_variables(environment="dev"):
         for var, value in env_vars.items():
             file.write(f"{var}={value}\n")
 
-    print(f"✅ Encrypted variables saved to {credentials_file}")
-
-# def decrypt_variables(environment="dev", passphrase=None):
-#     credentials_file, salt_file = get_paths(environment)
-
-#     if not os.path.exists(credentials_file) or not os.path.exists(salt_file):
-#         raise FileNotFoundError(f"Environment '{environment}' is missing credentials or salt file.")
-
-#     if passphrase is None:
-#         passphrase = getpass.getpass("Enter your passphrase to decrypt environment variables: ")
-
-#     salt = load_salt(salt_file)
-#     key = derive_key(passphrase, salt)
-
-#     encrypted_env_vars = dotenv_values(credentials_file)
-#     decrypted_env_vars = {}
-
-#     for var, value in encrypted_env_vars.items():
-#         try:
-#             decrypted_value = decrypt_value(key, value)
-#             decrypted_env_vars[var] = decrypted_value
-#         except Exception:
-#             decrypted_env_vars[var] = value  # Leave undecrypted if fails
-
-#     return decrypted_env_vars
+    print(f"Encrypted variables saved to {credentials_file}")
 
 import sys  # Add this at the top if not already
 
@@ -217,10 +188,10 @@ def decrypt_variables(environment="dev", passphrase=None):
                 break  # Passphrase is correct, exit loop
             except Exception:
                 attempts += 1
-                print(f"❗ Incorrect passphrase ({attempts}/{max_attempts} attempts)")
+                print(f"Incorrect passphrase ({attempts}/{max_attempts} attempts)")
                 passphrase = None  # Reset passphrase for next attempt
                 if attempts >= max_attempts:
-                    print("❌ Too many failed attempts. Exiting for security.")
+                    print("Too many failed attempts. Exiting for security.")
                     sys.exit(1)
 
     # Decrypt all variables after passphrase verified
@@ -241,7 +212,7 @@ def change_passphrase(environment="dev"):
     if not os.path.exists(credentials_file) or not os.path.exists(salt_file):
         raise FileNotFoundError(f"Environment '{environment}' is missing credentials or salt file.")
 
-    print(f"🔑 Decrypting existing variables for environment '{environment}'...")
+    print(f"Decrypting existing variables for environment '{environment}'...")
     old_passphrase = getpass.getpass("Enter the OLD passphrase: ")
     old_salt = load_salt(salt_file)
     old_key = derive_key(old_passphrase, old_salt)
@@ -254,15 +225,15 @@ def change_passphrase(environment="dev"):
             decrypted_value = decrypt_value(old_key, value)
             decrypted_env_vars[var] = decrypted_value
         except Exception as e:
-            print(f"❗ Error decrypting variable '{var}': {e}")
+            print(f"Error decrypting variable '{var}': {e}")
             return  # Abort to avoid partial re-encryption
 
-    print(f"🔒 Now setting a new passphrase...")
+    print(f"Now setting a new passphrase...")
     new_passphrase = getpass.getpass("Enter the NEW passphrase: ")
     confirm_passphrase = getpass.getpass("Confirm the NEW passphrase: ")
 
     if new_passphrase != confirm_passphrase:
-        print("❗ New passphrases do not match. Aborting.")
+        print("New passphrases do not match. Aborting.")
         return
 
     new_salt = generate_salt()
@@ -277,12 +248,12 @@ def change_passphrase(environment="dev"):
             encrypted_value = encrypt_value(new_key, value)
             file.write(f"{var}={encrypted_value}\n")
 
-    print(f"✅ Passphrase changed successfully for environment '{environment}'!")
+    print(f"Passphrase changed successfully for environment '{environment}'!")
 
 # ==== CLI MENU ====
 
 def main():
-    print("\n🔐 Welcome to Credential Manager (AES-GCM Edition) 🔐")
+    print("\nWelcome to Credential Manager (AES-GCM Edition) 🔐")
 
     while True:
         print("\nChoose an option:")
@@ -300,22 +271,22 @@ def main():
             env = input("Enter the environment (dev/staging/prod): ").strip().lower()
             try:
                 decrypted = decrypt_variables(environment=env)
-                print("\n🔓 Decrypted Variables:")
+                print("\nDecrypted Variables:")
                 for k, v in decrypted.items():
                     print(f"{k} = {v}")
             except FileNotFoundError as e:
-                print(f"❗ Error: {e}")
+                print(f"Error: {e}")
         elif choice == '3':
             env = input("Enter the environment (dev/staging/prod): ").strip().lower()
             try:
                 change_passphrase(environment=env)
             except FileNotFoundError as e:
-                print(f"❗ Error: {e}")
+                print(f"Error: {e}")
         elif choice == '4':
             print("👋 Exiting Credential Manager. Stay secure!")
             break
         else:
-            print("❗ Invalid choice. Please select 1, 2, 3, or 4.")
+            print("Invalid choice. Please select 1, 2, 3, or 4.")
 
 if __name__ == "__main__":
     main()
