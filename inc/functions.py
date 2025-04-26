@@ -4,6 +4,7 @@ from datetime import datetime
 import pandas as pd
 from inc.credential_manager import inject_decrypted_env
 
+# === E*TRADE API FUNCTIONS === #
 def oauth():
     """Handles OAuth 1.0a authentication flow for E*TRADE API access."""
     CONSUMER_KEY = os.getenv("PROD_API")
@@ -37,7 +38,6 @@ def oauth():
     )
     
     return session, request_token, request_token_secret
-
 
 def fetch_stock_info(session, symbols, current_time=None, sleep_between_calls=True, sleep_time=0.5, 
                      max_retries=1, retry_wait=2, log_file="inc/logs/stock_fetch_log.txt", max_log_size_mb=5):
@@ -161,12 +161,6 @@ def fetch_stock_info(session, symbols, current_time=None, sleep_between_calls=Tr
 
     return results
 
-def log_message(message, LOG_PATH="inc/logs/data_save_log.txt"):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
-    with open(LOG_PATH, "a") as log:
-        log.write(f"[{timestamp}] {message}\n")
-
 def data_collector(symbols, save_folder="data", interval_seconds=30):
     """Collects stock data every interval and saves to CSV."""
 
@@ -218,7 +212,8 @@ def data_collector(symbols, save_folder="data", interval_seconds=30):
                 log_message(f"Saved {len(new_df)} records at {timestamp.strftime('%H:%M:%S')}. Total: {len(df)}")
             else:
                 log_message("Market closed. Skipping data collection.")
-
+                # Need to exit if market is closed.
+                sys.exit(0)
             time.sleep(interval_seconds)
 
     except KeyboardInterrupt:
@@ -232,3 +227,10 @@ def data_collector(symbols, save_folder="data", interval_seconds=30):
 def fetch_session():
     from inc.functions import oauth
     return oauth()
+
+# === LOGGING FUNCTION === #
+def log_message(message, LOG_PATH="inc/logs/data_save_log.txt"):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
+    with open(LOG_PATH, "a") as log:
+        log.write(f"[{timestamp}] {message}\n")

@@ -41,3 +41,6 @@ credentials/
 logs/
 *.txt
 *.log
+
+# Ignore Old Files
+old/
