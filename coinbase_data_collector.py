@@ -5,16 +5,13 @@ import nest_asyncio
 from datetime import datetime, timedelta
 import inc.functions as fn
 
-nest_asyncio.apply()  # Allow safe usage if inside a Jupyter or interactive loop
+nest_asyncio.apply()
 
 pd.set_option('display.precision', 8)
 log_path = "inc/logs/coinbase_data_save_log.txt"
 headers = {'Content-Type': 'application/json'}
 
 def get_coinbase_order_book(symbol, level=2):
-    """
-    Fetch live Level 2 order book from Coinbase Exchange API.
-    """
     url = f"https://api.exchange.coinbase.com/products/{symbol}/book"
     params = {"level": level}
     headers = {
@@ -48,12 +45,10 @@ def get_coinbase_order_book(symbol, level=2):
         }
 
     except requests.RequestException as e:
-        # print(f"Error fetching order book for {symbol}: {e}")
-        fn.log_message(f"Error fetching order book for {symbol}: {e}",log_path)
+        fn.log_message(f"Error fetching order book for {symbol}: {e}", log_path)
         return None
 
 def coinbase_candles(symbol, end_date=None, interval='FIVE_MINUTE', convert=True, timezone='America/New_York'):
-    """Fetch historical OHLCV data from Coinbase."""
     interval_hours = {
         "ONE_MINUTE": 5, "FIVE_MINUTE": 24,
         "FIFTEEN_MINUTE": 48, "THIRTY_MINUTE": 72,
@@ -80,17 +75,17 @@ def coinbase_candles(symbol, end_date=None, interval='FIVE_MINUTE', convert=True
         data = response.json()
 
         if "candles" not in data or not data["candles"]:
-            print(f"No candle data returned for {symbol}.")
+            fn.log_message(f"No candle data returned for {symbol}.", log_path)
             return None
 
     except requests.RequestException as e:
-        print(f"Error fetching data for {symbol}: {e}")
+        fn.log_message(f"Error fetching data for {symbol}: {e}", log_path)
         return None
 
     df = pd.DataFrame(data["candles"])
 
     if df.empty or not {'low', 'high', 'open', 'close', 'volume', 'start'}.issubset(df.columns):
-        print(f"Invalid structure in Coinbase response for {symbol}.")
+        fn.log_message(f"Invalid structure in Coinbase response for {symbol}.", log_path)
         return None
 
     df['Datetime'] = pd.to_datetime(df['start'].astype(int), unit='s', utc=True).dt.tz_convert(timezone)
@@ -106,79 +101,66 @@ def coinbase_candles(symbol, end_date=None, interval='FIVE_MINUTE', convert=True
 def live_candle_book_logger(
     symbols=["BTC-USD", "ETH-USD"],
     interval="FIVE_MINUTE",
-    delay=60,
-    retries=3,
     output_dir="data/crypto"
 ):
     os.makedirs(output_dir, exist_ok=True)
 
-    while True:
-        for symbol in symbols:
-            attempt = 0
-            success = False
+    for symbol in symbols:
+        attempt = 0
+        success = False
 
-            while attempt < retries and not success:
-                try:
-                    # Fetch latest candle
-                    candle = coinbase_candles(symbol, interval=interval, convert=False)
-                    # Fetch current order book (Level 2)
-                    book = get_coinbase_order_book(symbol, level=2)
+        while attempt < 3 and not success:
+            try:
+                candle = coinbase_candles(symbol, interval=interval, convert=False)
+                book = get_coinbase_order_book(symbol, level=2)
 
-                    if candle is not None and book is not None:
-                        latest = candle.iloc[-1]
+                if candle is not None and book is not None:
+                    latest = candle.iloc[-1]
 
-                        # Build row with spread calculation
-                        log_row = {
-                            "Symbol": symbol,
-                            "Datetime": latest.name,
-                            "Open": latest['Open'],
-                            "High": latest['High'],
-                            "Low": latest['Low'],
-                            "Close": latest['Close'],
-                            "Volume": latest['Volume'],
-                            "Best_Bid_Size": book['best_bid_size'],
-                            "Best_Ask_Size": book['best_ask_size'],
-                            "Total_Bid_Depth": book['total_bid_depth'],
-                            "Total_Ask_Depth": book['total_ask_depth'],
-                            "Spread": (book['best_ask_price'] - book['best_bid_price']) if (book['best_ask_price'] and book['best_bid_price']) else None
-                        }
+                    log_row = {
+                        "Symbol": symbol,
+                        "Datetime": latest.name,
+                        "Open": latest['Open'],
+                        "High": latest['High'],
+                        "Low": latest['Low'],
+                        "Close": latest['Close'],
+                        "Volume": latest['Volume'],
+                        "Best_Bid_Size": book['best_bid_size'],
+                        "Best_Ask_Size": book['best_ask_size'],
+                        "Total_Bid_Depth": book['total_bid_depth'],
+                        "Total_Ask_Depth": book['total_ask_depth'],
+                        "Spread": (book['best_ask_price'] - book['best_bid_price']) if (book['best_ask_price'] and book['best_bid_price']) else None
+                    }
 
-                        # Save to separate CSV per symbol per day
-                        today = datetime.now().strftime("%Y-%m-%d")
-                        symbol_filename = os.path.join(output_dir, f"{symbol.replace('-', '_')}_{today}.csv")
+                    today = datetime.now().strftime("%Y-%m-%d")
+                    symbol_filename = os.path.join(output_dir, f"{symbol.replace('-', '_')}_{today}.csv")
 
-                        if os.path.exists(symbol_filename):
-                            df_existing = pd.read_csv(symbol_filename)
-                            df_existing = pd.concat([df_existing, pd.DataFrame([log_row])], ignore_index=True)
-                        else:
-                            df_existing = pd.DataFrame([log_row])
-
-                        df_existing.to_csv(symbol_filename, index=False)
-                        # print(f"[{datetime.now()}] Logged {symbol}")
-                        fn.log_message(f"[{datetime.now()}] Logged {symbol}",log_path)
-
-                        success = True
-
+                    if os.path.exists(symbol_filename):
+                        df_existing = pd.read_csv(symbol_filename)
+                        df_existing = pd.concat([df_existing, pd.DataFrame([log_row])], ignore_index=True)
                     else:
-                        # print(f"[{datetime.now()}] No data for {symbol}, skipping this cycle.")
-                        fn.log_message(f"[{datetime.now()}] No data for {symbol}, skipping this cycle.",log_path)
+                        df_existing = pd.DataFrame([log_row])
 
-                except Exception as e:
-                    attempt += 1
-                    # print(f"[{datetime.now()}] Error fetching data for {symbol} (Attempt {attempt}/{retries}): {e}")
-                    fn.log_message(f"[{datetime.now()}] Error fetching data for {symbol} (Attempt {attempt}/{retries}): {e}",log_path)
-                    time.sleep(5)
+                    df_existing.to_csv(symbol_filename, index=False)
+                    fn.log_message(f"[{datetime.now()}] Logged {symbol}", log_path)
 
-                if not success and attempt == retries:
-                    # print(f"[{datetime.now()}] Failed to fetch {symbol} after {retries} attempts. Skipping.")
-                    fn.log_message(f"[{datetime.now()}] Failed to fetch {symbol} after {retries} attempts. Skipping.",log_path)
+                    success = True
 
-        time.sleep(delay)
+                else:
+                    fn.log_message(f"[{datetime.now()}] No data for {symbol}, skipping this cycle.", log_path)
+
+            except Exception as e:
+                attempt += 1
+                fn.log_message(f"[{datetime.now()}] Error fetching data for {symbol} (Attempt {attempt}/{retries}): {e}", log_path)
+                time.sleep(5)
+
+        if not success and attempt == 3:
+            fn.log_message(f"[{datetime.now()}] Failed to fetch {symbol} after {attempt} attempts. Skipping.", log_path)
 
 if __name__ == "__main__":
-    # Run it
     symbols = [
-        "BTC-USD", "ETH-USD", "SOL-USD", "LTC-USD", "ADA-USD", "AVAX-USD", "DOGE-USD",
-        "MATIC-USD", "XRP-USD"
+        "BTC-USD", "ETH-USD", "SOL-USD", "LTC-USD",
+        "ADA-USD", "AVAX-USD", "DOGE-USD", "MATIC-USD",
+        "XRP-USD", "PEPE-USD"
     ]
-    live_candle_book_logger(symbols=symbols, interval="FIVE_MINUTE", delay=60)
+    live_candle_book_logger(symbols=symbols, interval="FIVE_MINUTE")
