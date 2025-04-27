@@ -2,7 +2,9 @@ import webbrowser, os, time, shutil, sys
 from rauth import OAuth1Service
 from datetime import datetime
 import pandas as pd
+import glob, json
 from inc.credential_manager import inject_decrypted_env
+from inc.indicators import apply_all_indicators
 
 # === E*TRADE API FUNCTIONS === #
 def oauth():
@@ -234,3 +236,309 @@ def log_message(message, LOG_PATH="inc/logs/data_save_log.txt"):
     os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
     with open(LOG_PATH, "a") as log:
         log.write(f"[{timestamp}] {message}\n")
+
+def load_crypto_data(symbol="BTC-USD", folder_path="data/crypto"):
+    """
+    Loads and concatenates CSV files for a given crypto symbol.
+    
+    Parameters:
+        symbol (str): The symbol to load (default "BTC-USD").
+        folder_path (str): Path to the folder containing CSV files.
+    
+    Returns:
+        pd.DataFrame: Combined DataFrame sorted by datetime.
+    """
+    pattern = f"{folder_path}/{symbol.replace('-', '_')}_*.csv"
+    files = glob.glob(pattern)
+
+    if not files:
+        raise ValueError(f"No files found for {symbol} in {folder_path}")
+
+    dfs = [pd.read_csv(file) for file in files]
+    df = pd.concat(dfs, ignore_index=True)
+
+    df['Datetime'] = pd.to_datetime(df['Datetime'])
+    df = df.sort_values(['Datetime']).reset_index(drop=True)  # <- Keep all rows, just sort
+
+    return df
+
+def generate_signal(row, rsi_buy_threshold=40, rsi_sell_threshold=65):
+    if row['Crossover'] == 'Bullish' and row['RSI'] < rsi_buy_threshold:
+        return 'BUY'
+    elif row['Crossover'] == 'Bearish' and row['RSI'] > rsi_sell_threshold:
+        return 'SELL'
+    else:
+        return 'HOLD'
+
+def backtest_signals(df, initial_balance=1000):
+    """
+    Simulates trading based on generated signals.
+
+    Parameters:
+        df (pd.DataFrame): DataFrame with 'Signal' and 'Close' columns.
+        initial_balance (float): Starting cash balance.
+
+    Returns:
+        float: Final account balance after simulation.
+        list: History of account values for plotting if needed.
+    """
+    balance = initial_balance
+    position = 0  # Number of coins held
+    account_history = []
+
+    for i, row in df.iterrows():
+        price = row['Close']
+        signal = row['Signal']
+
+        if signal == 'BUY' and balance > 0:
+            position = balance / price  # Buy as much as possible
+            balance = 0
+        elif signal == 'SELL' and position > 0:
+            balance = position * price  # Sell everything
+            position = 0
+
+        # Track account value at each step
+        account_value = balance + (position * price)
+        account_history.append(account_value)
+
+    # Final value (if still holding position, it will be liquidated at last price)
+    final_value = balance + (position * df['Close'].iloc[-1])
+
+    return final_value, account_history
+
+def auto_backtest(symbols, folder_path="data/crypto", initial_balance=1000):
+    """
+    Automatically backtests multiple crypto symbols.
+
+    Parameters:
+        symbols (list): List of symbol strings.
+        folder_path (str): Path to the folder with CSV files.
+        initial_balance (float): Starting cash for each symbol.
+
+    Returns:
+        pd.DataFrame: Summary of final balances for each symbol.
+    """
+    results = []
+
+    for symbol in symbols:
+        try:
+            df = load_crypto_data(symbol=symbol, folder_path=folder_path)
+            df = apply_all_indicators(df)
+            df['Signal'] = df.apply(generate_signal, axis=1)
+            final_balance, history = backtest_signals(df, initial_balance=initial_balance)
+
+            results.append({
+                'Symbol': symbol,
+                'Final_Balance': final_balance,
+                'Profit': final_balance - initial_balance,
+                'Profit_%': ((final_balance - initial_balance) / initial_balance) * 100
+            })
+        
+        except Exception as e:
+            print(f"Error processing {symbol}: {e}")
+
+    summary_df = pd.DataFrame(results)
+    return summary_df
+
+def live_audit(symbols, rsi_settings=None, folder_path="data/crypto"):
+    """
+    Provides the latest signal for each symbol for real-time auditing,
+    using custom RSI thresholds if available.
+    
+    Parameters:
+        symbols (list): List of symbols to audit.
+        rsi_settings (dict, optional): Preloaded RSI settings. If missing, use default thresholds.
+        folder_path (str): Path to candle data.
+    
+    Returns:
+        pd.DataFrame: Latest audit snapshot.
+    """
+    audit_results = []
+
+    for symbol in symbols:
+        try:
+            df = load_crypto_data(symbol=symbol, folder_path=folder_path)
+            df = apply_all_indicators(df)
+
+            # Use custom thresholds if available, else default to 40/65
+            buy_threshold = 40
+            sell_threshold = 65
+
+            if rsi_settings and symbol in rsi_settings:
+                buy_threshold = rsi_settings[symbol].get('buy_threshold', 40)
+                sell_threshold = rsi_settings[symbol].get('sell_threshold', 65)
+
+            df['Signal'] = df.apply(lambda row: generate_signal(row, rsi_buy_threshold=buy_threshold, rsi_sell_threshold=sell_threshold), axis=1)
+
+            latest = df.iloc[-1]
+            audit_results.append({
+                'Symbol': symbol,
+                'Datetime': latest['Datetime'],
+                'Close': latest['Close'],
+                'Signal': latest['Signal'],
+                'RSI': latest['RSI'],
+                'MACD': latest['MACD'],
+                'Signal_Line': latest['Signal_Line'],
+                'MACD_Diff': latest['MACD_Diff']
+            })
+
+        except Exception as e:
+            print(f"Error auditing {symbol}: {e}")
+
+    audit_df = pd.DataFrame(audit_results)
+    return audit_df
+
+
+def save_rsi_settings(settings, output_path="data/rsi_settings.json"):
+    """
+    Saves optimized RSI thresholds to a JSON file.
+
+    Parameters:
+        settings (dict): Dictionary with symbol as key and buy/sell thresholds.
+        output_path (str): Where to save the JSON file.
+    """
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, 'w') as f:
+        json.dump(settings, f, indent=4)
+    print(f"RSI settings saved to {output_path}")
+
+def load_rsi_settings(input_path="data/rsi_settings.json"):
+    """
+    Loads saved RSI thresholds from a JSON file.
+
+    Returns:
+        dict: Symbol-based RSI thresholds.
+    """
+    if not os.path.exists(input_path):
+        raise FileNotFoundError(f"RSI settings file not found at {input_path}")
+
+    with open(input_path, 'r') as f:
+        settings = json.load(f)
+
+    return settings
+
+def optimize_rsi_thresholds(df, buy_range=(30, 50, 5), sell_range=(60, 80, 5), initial_balance=1000):
+    """
+    Finds the best RSI buy/sell thresholds by backtesting different combinations.
+
+    Parameters:
+        df (pd.DataFrame): DataFrame with indicators already applied.
+        buy_range (tuple): (start, end, step) for buy RSI threshold testing.
+        sell_range (tuple): (start, end, step) for sell RSI threshold testing.
+        initial_balance (float): Starting balance for backtest.
+
+    Returns:
+        dict: Best parameters and corresponding performance.
+    """
+    best_result = {
+        'buy_threshold': None,
+        'sell_threshold': None,
+        'final_balance': -float('inf')
+    }
+
+    for buy_threshold in range(*buy_range):
+        for sell_threshold in range(*sell_range):
+            temp_df = df.copy()
+            temp_df['Signal'] = temp_df.apply(
+                lambda row: generate_signal(row, rsi_buy_threshold=buy_threshold, rsi_sell_threshold=sell_threshold),
+                axis=1
+            )
+            final_balance, _ = backtest_signals(temp_df, initial_balance=initial_balance)
+
+            if final_balance > best_result['final_balance']:
+                best_result = {
+                    'buy_threshold': buy_threshold,
+                    'sell_threshold': sell_threshold,
+                    'final_balance': final_balance
+                }
+
+    return best_result
+
+class PaperTrader:
+    def __init__(self, symbols, initial_cash=1000):
+        self.cash = {symbol: initial_cash for symbol in symbols}
+        self.positions = {symbol: 0 for symbol in symbols}
+        self.history = []  # Store dicts instead of just strings
+        self.snapshots = []  # New list to store snapshots
+
+
+    def act(self, audit_row):
+        symbol = audit_row.Symbol
+        signal = audit_row.Signal
+        price = audit_row.Close
+        timestamp = audit_row.Datetime
+
+        action = None
+        amount = 0
+        proceeds = 0
+
+        if signal == "BUY" and self.positions[symbol] == 0 and self.cash[symbol] > 0:
+            amount = self.cash[symbol] / price
+            self.positions[symbol] = amount
+            self.cash[symbol] = 0
+            action = "BUY"
+
+        elif signal == "SELL" and self.positions[symbol] > 0:
+            proceeds = self.positions[symbol] * price
+            self.cash[symbol] = proceeds
+            self.positions[symbol] = 0
+            action = "SELL"
+
+        if action:
+            self.history.append({
+                'Datetime': timestamp,
+                'Symbol': symbol,
+                'Action': action,
+                'Price': price,
+                'Amount': amount if action == "BUY" else 0,
+                'Proceeds': proceeds if action == "SELL" else 0,
+                'Portfolio_Value': self.portfolio_value({symbol: price})
+            })
+
+    def portfolio_value(self, prices):
+        total = 0
+        for symbol, cash_balance in self.cash.items():
+            total += cash_balance
+            total += self.positions[symbol] * prices.get(symbol, 0)
+        return total
+
+    def save_history(self, output_dir="data/paper_trader"):
+        """Saves the trade history to a CSV file, only if there are trades."""
+        if not self.history:
+            print("No trades to save.")
+            return
+
+        os.makedirs(output_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        history_df = pd.DataFrame(self.history)
+        output_path = os.path.join(output_dir, f"paper_trades_{timestamp}.csv")
+        history_df.to_csv(output_path, index=False)
+        log_message(f"Paper trading history saved to {output_path}", "inc/logs/coinbase_data_save_log.txt")
+
+
+    def snapshot_portfolio(self, current_prices, timestamp):
+        """
+        Takes a snapshot of total portfolio value at the current time.
+
+        Parameters:
+            current_prices (dict): Latest prices {symbol: price}.
+            timestamp (datetime): Current timestamp.
+        """
+        snapshot = {
+            'Datetime': timestamp,
+            'Total_Portfolio_Value': self.portfolio_value(current_prices)
+        }
+        self.snapshots.append(snapshot)
+
+    def save_snapshots(self, output_dir="data/paper_trader_snapshots"):
+        """Saves portfolio snapshots to a CSV file, only if there are snapshots."""
+        if not self.snapshots:
+            print("No snapshots to save.")
+            return
+
+        os.makedirs(output_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        snapshots_df = pd.DataFrame(self.snapshots)
+        output_path = os.path.join(output_dir, f"portfolio_snapshots_{timestamp}.csv")
+        snapshots_df.to_csv(output_path, index=False)
+        print(f"Portfolio snapshots saved to {output_path}")

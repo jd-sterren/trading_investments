@@ -161,6 +161,36 @@ if __name__ == "__main__":
     symbols = [
         "BTC-USD", "ETH-USD", "SOL-USD", "LTC-USD",
         "ADA-USD", "AVAX-USD", "DOGE-USD", "MATIC-USD",
-        "XRP-USD", "PEPE-USD"
+        "XRP-USD", "PEPE-USD", "XLM-USD"
     ]
+
+    # 1. Collect candles
     live_candle_book_logger(symbols=symbols, interval="FIVE_MINUTE")
+
+    # 2. Load optimized thresholds
+    rsi_settings = fn.load_rsi_settings()
+
+    # 3. Run live audit using tuned RSI settings
+    audit = fn.live_audit(symbols, rsi_settings=rsi_settings)
+
+    # 4. Save audit snapshot
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    audit_output_dir = "data/audit"
+    os.makedirs(audit_output_dir, exist_ok=True)
+    audit.to_csv(f"{audit_output_dir}/audit_snapshot_{timestamp}.csv", index=False)
+
+    # 5. Initialize PaperTrader
+    paper_trader = fn.PaperTrader(symbols)
+
+    # 6. Act on each audit signal
+    for row in audit.itertuples():
+        paper_trader.act(row)
+
+    # 7. Take portfolio snapshot
+    current_prices = {row.Symbol: row.Close for row in audit.itertuples()}
+    current_timestamp = datetime.now()
+    paper_trader.snapshot_portfolio(current_prices, current_timestamp)
+
+    # 8. SAVE Trade History and Snapshots
+    paper_trader.save_history()     # NEW: Save buy/sell trade actions
+    paper_trader.save_snapshots()   # NEW: Save portfolio value timeline

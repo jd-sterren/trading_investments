@@ -34,7 +34,7 @@ def backup_file(filepath):
     """Create a .bak backup before modifying."""
     if os.path.exists(filepath):
         shutil.copy(filepath, filepath + ".bak")
-        print(f"📄 Backup created: {filepath}.bak")
+        print(f"Backup created: {filepath}.bak")
 
 def get_paths(env="dev"):
     """Return correct paths for credentials and salt files."""
