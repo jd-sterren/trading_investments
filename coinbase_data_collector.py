@@ -4,6 +4,7 @@ import requests
 import nest_asyncio
 from datetime import datetime, timedelta
 import inc.functions as fn
+from inc.indicators import apply_all_indicators
 
 nest_asyncio.apply()
 
@@ -101,7 +102,8 @@ def coinbase_candles(symbol, end_date=None, interval='FIVE_MINUTE', convert=True
 def live_candle_book_logger(
     symbols=["BTC-USD", "ETH-USD"],
     interval="FIVE_MINUTE",
-    output_dir="data/crypto"
+    output_dir="data/crypto",
+    retries=3
 ):
     os.makedirs(output_dir, exist_ok=True)
 
@@ -163,34 +165,70 @@ if __name__ == "__main__":
         "ADA-USD", "AVAX-USD", "DOGE-USD", "MATIC-USD",
         "XRP-USD", "PEPE-USD", "XLM-USD"
     ]
+    
+    feature_cols = [
+        'RSI', 'MACD', 'MACD_Diff', 'MACD_ROC', 'Crossover_Encoded',
+        'ATR', 'Spread',
+        'EMA_5', 'EMA_13', 'EMA_26',
+        'Volume', 'Volume_SMA', 'OBV',
+        '%K', '%D',
+        'VWAP_1m', 'VWAP_15m',
+        'Fib_61.8%', 'Fib_100.0%', 'Fib_161.8%', 'Price_Position','Band_Width','Price_vs_Band'
+    ]
 
-    # 1. Collect candles
+    predictions = []
+
+    # Step 1: Preload ML models and scalers
+    models, scalers = fn.preload_models_and_scalers(symbols)
+
+    # Step 2: Collect new candles
     live_candle_book_logger(symbols=symbols, interval="FIVE_MINUTE")
 
-    # 2. Load optimized thresholds
-    rsi_settings = fn.load_rsi_settings()
+    # Current pull timestamp (when prediction is made)
+    pull_datetime = datetime.now()
 
-    # 3. Run live audit using tuned RSI settings
-    audit = fn.live_audit(symbols, rsi_settings=rsi_settings)
+    for symbol in symbols:
+        if symbol not in models or symbol not in scalers:
+            fn.log_message(f"{symbol}: Skipping — no model or scaler loaded.", log_path)
+            continue
 
-    # 4. Save audit snapshot
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    audit_output_dir = "data/audit"
-    os.makedirs(audit_output_dir, exist_ok=True)
-    audit.to_csv(f"{audit_output_dir}/audit_snapshot_{timestamp}.csv", index=False)
+        try:
+            df = fn.load_crypto_data(symbol)
+            df = apply_all_indicators(df)
 
-    # 5. Initialize PaperTrader
-    paper_trader = fn.PaperTrader(symbols)
+            # Add the encoded crossover feature
+            df['Crossover_Encoded'] = df['Crossover'].map({'Bullish': 1, 'Bearish': -1}).fillna(0)
 
-    # 6. Act on each audit signal
-    for row in audit.itertuples():
-        paper_trader.act(row)
+            latest = df.iloc[-1]
 
-    # 7. Take portfolio snapshot
-    current_prices = {row.Symbol: row.Close for row in audit.itertuples()}
-    current_timestamp = datetime.now()
-    paper_trader.snapshot_portfolio(current_prices, current_timestamp)
+            X_live = latest[feature_cols].values.reshape(1, -1)
+            X_scaled = scalers[symbol].transform(X_live)
+            pred = models[symbol].predict(X_scaled)[0]
 
-    # 8. SAVE Trade History and Snapshots
-    paper_trader.save_history()     # NEW: Save buy/sell trade actions
-    paper_trader.save_snapshots()   # NEW: Save portfolio value timeline
+
+            # Build final row with metadata
+            latest_row = latest.copy()
+            latest_row['Symbol'] = symbol
+            latest_row['Prediction'] = pred
+            latest_row['Pull_Datetime'] = pull_datetime
+
+            predictions.append(latest_row)
+
+        except Exception as e:
+            fn.log_message(f"{symbol}: Error during prediction → {e}", log_path)
+            continue
+
+    # Save to daily ML audit file
+    if predictions:
+        predictions_df = pd.DataFrame(predictions)
+
+        audit_output_dir = "data/audit_ml_predictions"
+        os.makedirs(audit_output_dir, exist_ok=True)
+
+        audit_file = os.path.join(audit_output_dir, f"ml_audit_{pull_datetime.strftime('%Y-%m-%d')}.csv")
+
+        # Append or create new file
+        if os.path.exists(audit_file):
+            predictions_df.to_csv(audit_file, mode='a', header=False, index=False)
+        else:
+            predictions_df.to_csv(audit_file, index=False)

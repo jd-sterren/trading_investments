@@ -1,42 +1,46 @@
 {
     "BTC-USD": {
-        "buy_threshold": 40,
-        "sell_threshold": 70
+        "buy_threshold": 35,
+        "sell_threshold": 65
     },
     "ETH-USD": {
-        "buy_threshold": 35,
-        "sell_threshold": 60
+        "buy_threshold": 30,
+        "sell_threshold": 70
     },
     "SOL-USD": {
         "buy_threshold": 40,
-        "sell_threshold": 65
+        "sell_threshold": 75
     },
     "LTC-USD": {
         "buy_threshold": 35,
-        "sell_threshold": 70
+        "sell_threshold": 75
     },
     "ADA-USD": {
-        "buy_threshold": 35,
-        "sell_threshold": 75
+        "buy_threshold": 30,
+        "sell_threshold": 70
     },
     "AVAX-USD": {
         "buy_threshold": 30,
-        "sell_threshold": 60
+        "sell_threshold": 70
     },
     "DOGE-USD": {
         "buy_threshold": 40,
         "sell_threshold": 70
     },
     "MATIC-USD": {
-        "buy_threshold": 35,
-        "sell_threshold": 70
+        "buy_threshold": 40,
+        "sell_threshold": 60
     },
     "XRP-USD": {
-        "buy_threshold": 45,
-        "sell_threshold": 65
+        "buy_threshold": 40,
+        "sell_threshold": 70
     },
     "PEPE-USD": {
+        "buy_threshold": 35,
+        "sell_threshold": 75
+    },
+    "XLM-USD": {
         "buy_threshold": 45,
-        "sell_threshold": 60
+        "sell_threshold": 70
     }
 }

@@ -145,6 +145,7 @@ def calculate_vwap(df):
     df['VWAP_15m'] = rolling_vwap(df, window=15)   # 15-minute VWAP (short-term trend)
     df['VWAP_1h'] = rolling_vwap(df, window=60)    # 1-hour VWAP (mid-term trend)
     df['VWAP_Day'] = rolling_vwap(df, window=len(df))  # Daily VWAP (overall trend)
+    df['Price_Position'] = df['Close'] - df['VWAP_1m']
 
     return df
 
@@ -168,6 +169,8 @@ def calculate_bollinger_bands(data, period=15):
     # Compute Upper & Lower Bands
     data['Upper_Band'] = data['Middle_Band'] + (std_dev * 2)
     data['Lower_Band'] = data['Middle_Band'] - (std_dev * 2)
+    data['Band_Width'] = data['Upper_Band'] - data['Lower_Band']
+    data['Price_vs_Band'] = (data['Close'] - data['Middle_Band']) / data['Band_Width']
 
     return data
 

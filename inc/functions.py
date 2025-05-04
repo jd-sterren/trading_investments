@@ -3,6 +3,7 @@ from rauth import OAuth1Service
 from datetime import datetime
 import pandas as pd
 import glob, json
+import joblib
 from inc.credential_manager import inject_decrypted_env
 from inc.indicators import apply_all_indicators
 
@@ -542,3 +543,107 @@ class PaperTrader:
         output_path = os.path.join(output_dir, f"portfolio_snapshots_{timestamp}.csv")
         snapshots_df.to_csv(output_path, index=False)
         print(f"Portfolio snapshots saved to {output_path}")
+
+def preload_models_and_scalers(symbols, model_dir="inc/models"):
+    models = {}
+    scalers = {}
+
+    for symbol in symbols:
+        try:
+            model_path = os.path.join(model_dir, f"{symbol.replace('-', '_')}_rf_model.pkl")
+            scaler_path = os.path.join(model_dir, f"{symbol.replace('-', '_')}_scaler.pkl")
+
+            models[symbol] = joblib.load(model_path)
+            scalers[symbol] = joblib.load(scaler_path)
+
+        except FileNotFoundError:
+            print(f"Missing model or scaler for {symbol}")
+            continue
+
+    return models, scalers
+
+def create_profit_labels(df, profit_threshold=0.005, loss_threshold=-0.005, future_window=5):
+    """
+    Labels data based on future returns, handled separately for each symbol.
+    
+    Parameters:
+        df (pd.DataFrame): Must contain 'Symbol' and 'Close'.
+        profit_threshold (float): Percent gain to trigger BUY label.
+        loss_threshold (float): Percent loss to trigger SELL label.
+        future_window (int): Number of rows (minutes) to look ahead.
+
+    Returns:
+        pd.DataFrame: DataFrame with added 'Label' column.
+    """
+    df = df.copy()
+    df['Label'] = 0  # Default HOLD
+
+    symbols = df['Symbol'].unique()
+
+    for symbol in symbols:
+        df_symbol = df[df['Symbol'] == symbol]
+
+        future_returns = (df_symbol['Close'].shift(-future_window) - df_symbol['Close']) / df_symbol['Close']
+
+        buy_condition = future_returns > profit_threshold
+        sell_condition = future_returns < loss_threshold
+
+        df.loc[df_symbol.index[buy_condition], 'Label'] = 1   # BUY
+        df.loc[df_symbol.index[sell_condition], 'Label'] = -1  # SELL
+
+    return df
+
+def backtest_labels_per_symbol(df, initial_balance=1000, fee_rate=0.007):
+    """
+    Backtests label-based trading per symbol with fee adjustment and trade count.
+
+    Parameters:
+        df (pd.DataFrame): Must include 'Symbol', 'Close', and 'Label' columns.
+        initial_balance (float): Starting balance per symbol.
+        fee_rate (float): Total round-trip fee (e.g., 0.007 = 0.35% buy + 0.35% sell).
+
+    Returns:
+        pd.DataFrame: Summary with balance, profit, percent return, and trade count.
+    """
+    results = []
+    symbols = df['Symbol'].unique()
+    fee_per_trade = fee_rate / 2  # split between buy/sell
+
+    for symbol in symbols:
+        df_symbol = df[df['Symbol'] == symbol]
+        balance = initial_balance
+        position = 0
+        trades = 0  # count of buy + sell
+        history = []
+
+        for _, row in df_symbol.iterrows():
+            price = row['Close']
+            label = row['Label']
+
+            if label == 1 and balance > 0:  # BUY
+                position = (balance / price) * (1 - fee_per_trade)
+                balance = 0
+                trades += 1
+
+            elif label == -1 and position > 0:  # SELL
+                balance = (position * price) * (1 - fee_per_trade)
+                position = 0
+                trades += 1
+
+            account_value = balance + (position * price)
+            history.append(account_value)
+
+        # Final liquidation if still holding
+        if position > 0:
+            balance = (position * df_symbol['Close'].iloc[-1]) * (1 - fee_per_trade)
+
+        final_balance = balance
+        results.append({
+            'Symbol': symbol,
+            'Final_Balance': final_balance,
+            'Profit': final_balance - initial_balance,
+            'Profit_%': ((final_balance - initial_balance) / initial_balance) * 100,
+            'Trades': trades
+        })
+
+    return pd.DataFrame(results)
