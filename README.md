@@ -57,11 +57,12 @@ Update rolling features in memory
 Feed into the trained model
 Predict next move:
 
-🔵 Hold
+0 Hold
 
-🟢 Buy
+1 Buy
 
-🔴 Sell
+-1 Sell
 
 Log predictions and suggested actions for analysis
-(Optional Later: Send alerts via webhook, Discord, email OR IF BOLD A.I. does the buy and sell)
+
+Files used currently: coinbase_data_collector.py, optimize_rsi.py

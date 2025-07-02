@@ -75,7 +75,7 @@ def decrypt_value(key, token):
     plaintext = decryptor.update(ciphertext) + decryptor.finalize()
     return plaintext.decode()
 
-def inject_decrypted_env(environment="dev", required_vars=None, crash_on_fail=True):
+def inject_decrypted_env(environment="dev", required_vars=None, crash_on_fail=True, passphrase=None):
     """
     Decrypts environment variables and injects them into os.environ.
     
@@ -83,9 +83,10 @@ def inject_decrypted_env(environment="dev", required_vars=None, crash_on_fail=Tr
         environment (str): The environment to load ('dev', 'staging', 'prod').
         required_vars (list, optional): List of required variable names.
         crash_on_fail (bool, optional): Whether to exit if required variables are missing.
+        passphrase (str, optional): Passphrase for decryption. If None, default behavior is used.
     """
     try:
-        env_vars = decrypt_variables(environment=environment)
+        env_vars = decrypt_variables(environment=environment, passphrase=passphrase)
     except Exception as e:
         print(f"Failed to decrypt environment '{environment}': {e}")
         if crash_on_fail:
@@ -110,6 +111,7 @@ def inject_decrypted_env(environment="dev", required_vars=None, crash_on_fail=Tr
                 return False
 
     return True  # Successfully injected
+
 
 
 # ==== MAIN FUNCTIONS ====
@@ -253,7 +255,7 @@ def change_passphrase(environment="dev"):
 # ==== CLI MENU ====
 
 def main():
-    print("\nWelcome to Credential Manager (AES-GCM Edition) 🔐")
+    print("\nWelcome to Credential Manager (AES-GCM Edition)")
 
     while True:
         print("\nChoose an option:")
@@ -283,10 +285,21 @@ def main():
             except FileNotFoundError as e:
                 print(f"Error: {e}")
         elif choice == '4':
-            print("👋 Exiting Credential Manager. Stay secure!")
+            print("Exiting Credential Manager. Stay secure!")
             break
         else:
             print("Invalid choice. Please select 1, 2, 3, or 4.")
+
+def get_passphrase(passphrase_path="inc/credentials/prod/.passphrase"):
+    """
+    Load passphrase from a hidden file for automation.
+    """
+    try:
+        with open(passphrase_path, "r") as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        print(f"Passphrase file not found: {passphrase_path}")
+        exit(1)
 
 if __name__ == "__main__":
     main()

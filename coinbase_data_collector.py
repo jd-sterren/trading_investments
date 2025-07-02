@@ -1,16 +1,28 @@
 import pandas as pd
 import time, os
-import requests
+import requests, json
 import nest_asyncio
 from datetime import datetime, timedelta
 import inc.functions as fn
 from inc.indicators import apply_all_indicators
+import inc.coinbase as cb
+import tensorflow as tf
+import numpy as np
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.ensemble import RandomForestClassifier
+import os
+import pickle
+from tensorflow import keras
 
 nest_asyncio.apply()
 
 pd.set_option('display.precision', 8)
 log_path = "inc/logs/coinbase_data_save_log.txt"
 headers = {'Content-Type': 'application/json'}
+# Load model assets
+model, scaler, feature_columns = fn.load_model_assets(folder="inc/models", name="ADA_USD")
 
 def get_coinbase_order_book(symbol, level=2):
     url = f"https://api.exchange.coinbase.com/products/{symbol}/book"
@@ -165,70 +177,30 @@ if __name__ == "__main__":
         "ADA-USD", "AVAX-USD", "DOGE-USD", "MATIC-USD",
         "XRP-USD", "PEPE-USD", "XLM-USD"
     ]
-    
-    feature_cols = [
-        'RSI', 'MACD', 'MACD_Diff', 'MACD_ROC', 'Crossover_Encoded',
-        'ATR', 'Spread',
-        'EMA_5', 'EMA_13', 'EMA_26',
-        'Volume', 'Volume_SMA', 'OBV',
-        '%K', '%D',
-        'VWAP_1m', 'VWAP_15m',
-        'Fib_61.8%', 'Fib_100.0%', 'Fib_161.8%', 'Price_Position','Band_Width','Price_vs_Band'
-    ]
 
-    predictions = []
-
-    # Step 1: Preload ML models and scalers
-    models, scalers = fn.preload_models_and_scalers(symbols)
-
-    # Step 2: Collect new candles
+    # Step 1: Collect new candles
     live_candle_book_logger(symbols=symbols, interval="FIVE_MINUTE")
 
-    # Current pull timestamp (when prediction is made)
-    pull_datetime = datetime.now()
-
+    ### ============================= Basic indicator test ============================ ###
     for symbol in symbols:
-        if symbol not in models or symbol not in scalers:
-            fn.log_message(f"{symbol}: Skipping — no model or scaler loaded.", log_path)
-            continue
+        # Load and preprocess data
+        df = fn.load_crypto_data(symbol)
 
-        try:
-            df = fn.load_crypto_data(symbol)
-            df = apply_all_indicators(df)
+        # Get the last close price for reference
+        close = df['Close'].iloc[-1]
 
-            # Add the encoded crossover feature
-            df['Crossover_Encoded'] = df['Crossover'].map({'Bullish': 1, 'Bearish': -1}).fillna(0)
+        # Prep Dataframe for model prediction
+        df = fn.apply_all_indicators(df)
+        df = fn.clean_features(df)
+        df = df.replace([np.inf, -np.inf], np.nan)
+        df = df.dropna()
+        row_scaled = scaler.transform(df.iloc[[-1]])
 
-            latest = df.iloc[-1]
+        # Make prediction
+        probs = model.predict(row_scaled)[0]  # returns array([prob_0, prob_1, prob_2])
+        pred_class = np.argmax(probs)         # 0 = SELL, 1 = HOLD, 2 = BUY
+        confidence = probs[pred_class]
 
-            X_live = latest[feature_cols].values.reshape(1, -1)
-            X_scaled = scalers[symbol].transform(X_live)
-            pred = models[symbol].predict(X_scaled)[0]
-
-
-            # Build final row with metadata
-            latest_row = latest.copy()
-            latest_row['Symbol'] = symbol
-            latest_row['Prediction'] = pred
-            latest_row['Pull_Datetime'] = pull_datetime
-
-            predictions.append(latest_row)
-
-        except Exception as e:
-            fn.log_message(f"{symbol}: Error during prediction → {e}", log_path)
-            continue
-
-    # Save to daily ML audit file
-    if predictions:
-        predictions_df = pd.DataFrame(predictions)
-
-        audit_output_dir = "data/audit_ml_predictions"
-        os.makedirs(audit_output_dir, exist_ok=True)
-
-        audit_file = os.path.join(audit_output_dir, f"ml_audit_{pull_datetime.strftime('%Y-%m-%d')}.csv")
-
-        # Append or create new file
-        if os.path.exists(audit_file):
-            predictions_df.to_csv(audit_file, mode='a', header=False, index=False)
-        else:
-            predictions_df.to_csv(audit_file, index=False)
+        # Output the prediction and confidence
+        class_map = {0: 'SELL', 1: 'HOLD', 2: 'BUY'}
+        fn.save_prediction_to_excel(symbol, class_map[pred_class], confidence, dict(zip(class_map.values(), probs.round(4))), close)
