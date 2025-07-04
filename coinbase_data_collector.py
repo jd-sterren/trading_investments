@@ -22,7 +22,7 @@ pd.set_option('display.precision', 8)
 log_path = "inc/logs/coinbase_data_save_log.txt"
 headers = {'Content-Type': 'application/json'}
 # Load model assets
-model, scaler, feature_columns = fn.load_model_assets(folder="inc/models", name="ADA_USD")
+# model, scaler, feature_columns = fn.load_model_assets(folder="inc/models", name="ADA_USD")
 
 def get_coinbase_order_book(symbol, level=2):
     url = f"https://api.exchange.coinbase.com/products/{symbol}/book"
@@ -183,6 +183,7 @@ if __name__ == "__main__":
 
     ### ============================= Basic indicator test ============================ ###
     for symbol in symbols:
+        model, scaler, feature_columns = fn.load_model_assets(folder="inc/models", name=symbol)
         # Load and preprocess data
         df = fn.load_crypto_data(symbol)
 
