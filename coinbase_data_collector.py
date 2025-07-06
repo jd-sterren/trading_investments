@@ -182,26 +182,31 @@ if __name__ == "__main__":
     live_candle_book_logger(symbols=symbols, interval="FIVE_MINUTE")
 
     ### ============================= Basic indicator test ============================ ###
-    for symbol in symbols:
-        model, scaler, feature_columns = fn.load_model_assets(folder="inc/models", name=symbol)
-        # Load and preprocess data
-        df = fn.load_crypto_data(symbol)
+    # for symbol in symbols:
+    #     model, scaler, feature_columns = fn.load_model_assets(folder="inc/models", name=symbol)
+    #     # Load and preprocess data
+    #     df = fn.load_crypto_data(symbol)
 
-        # Get the last close price for reference
-        close = df['Close'].iloc[-1]
+    #     # Get the last close price for reference
+    #     close = df['Close'].iloc[-1]
 
-        # Prep Dataframe for model prediction
-        df = fn.apply_all_indicators(df)
-        df = fn.clean_features(df)
-        df = df.replace([np.inf, -np.inf], np.nan)
-        df = df.dropna()
-        row_scaled = scaler.transform(df.iloc[[-1]])
+    #     # Prep Dataframe for model prediction
+    #     df = fn.apply_all_indicators(df)
+    #     df = fn.clean_features(df)
 
-        # Make prediction
-        probs = model.predict(row_scaled)[0]  # returns array([prob_0, prob_1, prob_2])
-        pred_class = np.argmax(probs)         # 0 = SELL, 1 = HOLD, 2 = BUY
-        confidence = probs[pred_class]
+    #     df = df[['RSI', 'MACD', 'MACD_Diff', 'MACD_ROC', '%K', '%D',
+    #         'EMA_5', 'EMA_13', 'EMA_26', 'VWAP_1m', 'Price_vs_Band',
+    #         'ATR', 'Band_Width', 'OBV', 'Spread']]
 
-        # Output the prediction and confidence
-        class_map = {0: 'SELL', 1: 'HOLD', 2: 'BUY'}
-        fn.save_prediction_to_excel(symbol, class_map[pred_class], confidence, dict(zip(class_map.values(), probs.round(4))), close)
+    #     df = df.replace([np.inf, -np.inf], np.nan)
+    #     df = df.dropna()
+    #     row_scaled = scaler.transform(df.iloc[[-1]])
+
+    #     # Make prediction
+    #     probs = model.predict(row_scaled)[0]  # returns array([prob_0, prob_1, prob_2])
+    #     pred_class = np.argmax(probs)         # 0 = SELL, 1 = HOLD, 2 = BUY
+    #     confidence = probs[pred_class]
+
+    #     # Output the prediction and confidence
+    #     class_map = {0: 'SELL', 1: 'HOLD', 2: 'BUY'}
+    #     fn.save_prediction_to_excel(symbol, class_map[pred_class], confidence, dict(zip(class_map.values(), probs.round(4))), close)

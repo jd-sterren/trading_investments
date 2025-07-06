@@ -607,53 +607,76 @@ def preload_models_and_scalers(symbols, model_dir="inc/models"):
 
 #     return df
 
-def create_profit_labels(df, profit_threshold=0.005, loss_threshold=-0.005, future_window=5, rsi_settings_path='data/rsi_settings.json'):
-    """
-    Labels data based on future returns and adds RSI threshold flags.
+# def create_profit_labels(df, profit_threshold=0.005, loss_threshold=-0.005, future_window=5, rsi_settings_path='data/rsi_settings.json'):
+#     """
+#     Labels data based on future returns and adds RSI threshold flags.
     
-    Parameters:
-        df (pd.DataFrame): Must contain 'Symbol', 'Close', and 'RSI'.
-        profit_threshold (float): Percent gain to trigger BUY label.
-        loss_threshold (float): Percent loss to trigger SELL label.
-        future_window (int): Number of rows (minutes) to look ahead.
-        rsi_settings_path (str): Path to RSI threshold JSON.
+#     Parameters:
+#         df (pd.DataFrame): Must contain 'Symbol', 'Close', and 'RSI'.
+#         profit_threshold (float): Percent gain to trigger BUY label.
+#         loss_threshold (float): Percent loss to trigger SELL label.
+#         future_window (int): Number of rows (minutes) to look ahead.
+#         rsi_settings_path (str): Path to RSI threshold JSON.
 
-    Returns:
-        pd.DataFrame: DataFrame with added 'Label', 'RSI_Buy_Zone', 'RSI_Sell_Zone'.
-    """
-    # Load RSI settings
-    with open(rsi_settings_path, 'r') as f:
-        rsi_settings = json.load(f)
+#     Returns:
+#         pd.DataFrame: DataFrame with added 'Label', 'RSI_Buy_Zone', 'RSI_Sell_Zone'.
+#     """
+#     # Load RSI settings
+#     with open(rsi_settings_path, 'r') as f:
+#         rsi_settings = json.load(f)
 
+#     df = df.copy()
+#     df['Label'] = 0
+#     df['RSI_Buy_Zone'] = 0
+#     df['RSI_Sell_Zone'] = 0
+
+#     symbols = df['Symbol'].unique()
+
+#     for symbol in symbols:
+#         if symbol not in rsi_settings:
+#             continue  # Skip symbols without thresholds
+
+#         # Get thresholds
+#         rsi_buy = rsi_settings[symbol]['buy_threshold']
+#         rsi_sell = rsi_settings[symbol]['sell_threshold']
+
+#         df_symbol = df[df['Symbol'] == symbol]
+
+#         # Future return calculation
+#         future_returns = (df_symbol['Close'].shift(-future_window) - df_symbol['Close']) / df_symbol['Close']
+
+#         buy_condition = future_returns > profit_threshold
+#         sell_condition = future_returns < loss_threshold
+
+#         df.loc[df_symbol.index[buy_condition], 'Label'] = 1
+#         df.loc[df_symbol.index[sell_condition], 'Label'] = -1
+
+#         # Add RSI zone flags
+#         df.loc[df_symbol.index, 'RSI_Buy_Zone'] = (df_symbol['RSI'] < rsi_buy).astype(int)
+#         df.loc[df_symbol.index, 'RSI_Sell_Zone'] = (df_symbol['RSI'] > rsi_sell).astype(int)
+
+#     return df
+
+def create_profit_labels(df, profit_multiplier=0.5, loss_multiplier=0.5, future_window=5):
     df = df.copy()
-    df['Label'] = 0
+    df['Label'] = 0  # Default: Hold
     df['RSI_Buy_Zone'] = 0
     df['RSI_Sell_Zone'] = 0
 
-    symbols = df['Symbol'].unique()
-
+    symbols = df['Symbol'].unique() if 'Symbol' in df.columns else [None]
     for symbol in symbols:
-        if symbol not in rsi_settings:
-            continue  # Skip symbols without thresholds
-
-        # Get thresholds
-        rsi_buy = rsi_settings[symbol]['buy_threshold']
-        rsi_sell = rsi_settings[symbol]['sell_threshold']
-
-        df_symbol = df[df['Symbol'] == symbol]
-
-        # Future return calculation
+        df_symbol = df if symbol is None else df[df['Symbol'] == symbol]
         future_returns = (df_symbol['Close'].shift(-future_window) - df_symbol['Close']) / df_symbol['Close']
+        
+        atr = df_symbol['ATR']
+        profit_threshold = profit_multiplier * atr
+        loss_threshold = -loss_multiplier * atr
 
         buy_condition = future_returns > profit_threshold
         sell_condition = future_returns < loss_threshold
 
-        df.loc[df_symbol.index[buy_condition], 'Label'] = 1
-        df.loc[df_symbol.index[sell_condition], 'Label'] = -1
-
-        # Add RSI zone flags
-        df.loc[df_symbol.index, 'RSI_Buy_Zone'] = (df_symbol['RSI'] < rsi_buy).astype(int)
-        df.loc[df_symbol.index, 'RSI_Sell_Zone'] = (df_symbol['RSI'] > rsi_sell).astype(int)
+        df.loc[df_symbol.index[buy_condition], 'Label'] = 1   # BUY
+        df.loc[df_symbol.index[sell_condition], 'Label'] = -1  # SELL
 
     return df
 
