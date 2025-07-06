@@ -210,3 +210,39 @@ if __name__ == "__main__":
     #     # Output the prediction and confidence
     #     class_map = {0: 'SELL', 1: 'HOLD', 2: 'BUY'}
     #     fn.save_prediction_to_excel(symbol, class_map[pred_class], confidence, dict(zip(class_map.values(), probs.round(4))), close)
+    
+    model, scaler, feature_columns = fn.load_model_assets(folder="inc/models", name="ADA-USD")
+    df = fn.load_crypto_data("ADA-USD")
+
+    # Get the last close price for reference
+    close = df['Close'].iloc[-1]
+
+    df = fn.apply_all_indicators(df)
+
+    features = ['MACD_Diff', 'Price_Position', 'Price_vs_Band', 'RSI', '%K',
+                'MACD', '%D', 'Signal_Line', 'Fib_Bearish_200.0%', 'Fib_Bearish_261.8%',
+                'Fib_Bearish_161.8%', 'Fib_Bearish_423.6%', 'Fib_Bearish_127.2%',
+                'Trough', 'Fib_100.0%', 'Fib_61.8%', 'Fib_50.0%', 'Fib_38.2%', 'Spread']
+
+    df = df[features]
+    df = df.replace([np.inf, -np.inf], np.nan)
+    df = df.dropna()
+    row_scaled = scaler.transform(df.iloc[[-1]])
+
+    # Make prediction
+    probs = model.predict(row_scaled)[0]  # returns array([prob_0, prob_1, prob_2])
+    pred_class = np.argmax(probs)         # 0 = SELL, 1 = HOLD, 2 = BUY
+    confidence = probs[pred_class]
+
+    # Output the prediction and confidence
+    class_map = {0: 'SELL', 1: 'HOLD', 2: 'BUY'}
+
+    # Apply threshold logic
+    if pred_class == 2 and confidence >= 0.70:
+        action = 'BUY'
+    elif pred_class == 0 and confidence >= 0.75:
+        action = 'SELL'
+    else:
+        action = 'HOLD'
+
+    fn.save_prediction_to_excel("ADA-USD", action, confidence, dict(zip(class_map.values(), probs.round(4))), close)
