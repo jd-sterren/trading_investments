@@ -227,6 +227,10 @@ if __name__ == "__main__":
     df = df[features]
     df = df.replace([np.inf, -np.inf], np.nan)
     df = df.dropna()
+
+    # Now extract RSI from the cleaned row
+    rsi = df['RSI'].iloc[-1]
+
     row_scaled = scaler.transform(df.iloc[[-1]])
 
     # Make prediction
@@ -238,11 +242,17 @@ if __name__ == "__main__":
     class_map = {0: 'SELL', 1: 'HOLD', 2: 'BUY'}
 
     # Apply threshold logic
-    if pred_class == 2 and confidence >= 0.70:
+    # if pred_class == 2 and confidence >= 0.68:
+    #     action = 'BUY'
+    # elif pred_class == 0 and confidence >= 0.65:
+    #     action = 'SELL'
+    # else:
+    #     action = 'HOLD'
+    if pred_class == 2 and confidence >= 0.68 and rsi <= 30:
         action = 'BUY'
-    elif pred_class == 0 and confidence >= 0.75:
+    elif pred_class == 0 and confidence >= 0.65 and rsi >= 60:
         action = 'SELL'
     else:
         action = 'HOLD'
 
-    fn.save_prediction_to_excel("ADA-USD", action, confidence, dict(zip(class_map.values(), probs.round(4))), close)
+    fn.save_prediction_to_excel("ADA-USD", action, confidence, dict(zip(class_map.values(), probs.round(4))), close, rsi)

@@ -1147,7 +1147,7 @@ def predict_trade_signal(live_df, model, scaler, feature_columns, thresholds={-1
 
     return decision, float(pred_conf), prob_dict
 
-def save_prediction_to_excel(symbol, prediction, confidence, probabilities, close_price, output_folder="data/audit"):
+def save_prediction_to_excel(symbol, prediction, confidence, probabilities, close_price, rsi_reading, output_folder="data/audit"):
     # Construct output path
     filename = f"{symbol}_Predicts.xlsx"
     filepath = os.path.join(output_folder, filename)
@@ -1159,6 +1159,7 @@ def save_prediction_to_excel(symbol, prediction, confidence, probabilities, clos
         "Prediction": prediction,
         "Confidence": round(confidence * 100, 2),
         "Close": close_price,
+        "RSI": rsi_reading,
         "Prob_Sell": probabilities.get("SELL", None),
         "Prob_Hold": probabilities.get("HOLD", None),
         "Prob_Buy": probabilities.get("BUY", None)
@@ -1175,6 +1176,7 @@ def save_prediction_to_excel(symbol, prediction, confidence, probabilities, clos
     os.makedirs(output_folder, exist_ok=True)
     df_new.to_excel(filepath, index=False)
     print(f"Prediction saved to: {filepath}")
+    
 # def check_current_prediction(symbol, model, scaler, feature_columns):
 #     df = load_crypto_data(symbol)
 #     df = apply_all_indicators(df)
